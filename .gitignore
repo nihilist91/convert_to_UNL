@@ -1,5 +1,32 @@
-/.venv
-/build
-/Excel_to_UNL_Converter.spec
-/run_converter.bat
-/test_conversion.py
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Test files
+test_*.py
+
+# Logs
+*.log

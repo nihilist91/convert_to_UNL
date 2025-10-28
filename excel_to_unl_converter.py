@@ -1,6 +1,6 @@
 """
-Excel to UNL Converter - Desktop Application
-Converts Excel virement files to UNL format
+Excel/Word to UNL Converter - Desktop Application
+Converts Excel or Word virement files to UNL format
 """
 import sys
 import os
@@ -12,18 +12,20 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont, QIcon
 import pandas as pd
+from docx import Document
+from version import __version__, __app_name__
 
 
 class ExcelToUNLConverter(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.excel_file = None
+        self.input_file = None
         self.output_data = []
         self.init_ui()
         
     def init_ui(self):
         """Initialize the user interface"""
-        self.setWindowTitle("Excel to UNL Converter")
+        self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setGeometry(100, 100, 900, 700)
         
         # Create central widget and main layout
@@ -34,7 +36,7 @@ class ExcelToUNLConverter(QMainWindow):
         main_layout.setContentsMargins(20, 20, 20, 20)
         
         # Title
-        title_label = QLabel("📄 Excel to UNL File Converter")
+        title_label = QLabel("📄 Excel/Word to UNL File Converter")
         title_font = QFont()
         title_font.setPointSize(16)
         title_font.setBold(True)
@@ -59,7 +61,7 @@ class ExcelToUNLConverter(QMainWindow):
         main_layout.addWidget(preview_group)
         
         # Developer credit footer
-        footer_label = QLabel("Developed by: CHAARAOUI MOHAMMED | 0659226281")
+        footer_label = QLabel(f"Developed by: CHAARAOUI MOHAMMED | 0659226281 | Version {__version__}")
         footer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         footer_font = QFont()
         footer_font.setPointSize(9)
@@ -82,7 +84,7 @@ class ExcelToUNLConverter(QMainWindow):
         self.file_label = QLabel("No file selected")
         self.file_label.setStyleSheet("padding: 5px; background-color: #f0f0f0; border-radius: 3px;")
         
-        self.browse_btn = QPushButton("Browse Excel File")
+        self.browse_btn = QPushButton("Browse Excel/Word File")
         self.browse_btn.clicked.connect(self.browse_file)
         self.browse_btn.setMinimumHeight(35)
         
@@ -377,24 +379,24 @@ class ExcelToUNLConverter(QMainWindow):
         self.inputs['nom_fic'].setText(filename)
         
     def browse_file(self):
-        """Browse for Excel file"""
+        """Browse for Excel or Word file"""
         file_name, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Excel File",
+            "Select Excel or Word File",
             "",
-            "Excel Files (*.xlsx *.xls);;All Files (*)"
+            "Office Files (*.xlsx *.xls *.docx *.doc);;Excel Files (*.xlsx *.xls);;Word Files (*.docx *.doc);;All Files (*)"
         )
         
         if file_name:
-            self.excel_file = file_name
+            self.input_file = file_name
             self.file_label.setText(os.path.basename(file_name))
             self.convert_btn.setEnabled(True)
             self.statusBar().showMessage(f"File loaded: {os.path.basename(file_name)}")
                 
     def convert_to_unl(self):
-        """Convert Excel to UNL format"""
-        if not self.excel_file:
-            QMessageBox.warning(self, "Warning", "Please select an Excel file first!")
+        """Convert Excel or Word to UNL format"""
+        if not self.input_file:
+            QMessageBox.warning(self, "Warning", "Please select a file first!")
             return
             
         # Validate inputs
@@ -410,54 +412,19 @@ class ExcelToUNLConverter(QMainWindow):
                 return
         
         try:
-            # Read Excel file
-            df = pd.read_excel(self.excel_file, header=None)
+            # Determine file type and extract data
+            file_ext = os.path.splitext(self.input_file)[1].lower()
             
-            # Find the data section (starts after "NOM" header)
-            data_start_row = None
-            for i, row in df.iterrows():
-                if row[2] == 'NOM':
-                    data_start_row = i + 1
-                    break
-            
-            if data_start_row is None:
-                QMessageBox.critical(self, "Error", "Could not find data header in Excel file!")
+            if file_ext in ['.xlsx', '.xls']:
+                data_rows = self.extract_from_excel()
+            elif file_ext in ['.docx', '.doc']:
+                data_rows = self.extract_from_word()
+            else:
+                QMessageBox.critical(self, "Error", "Unsupported file format!")
                 return
             
-            # Extract data rows
-            data_rows = []
-            for i in range(data_start_row, len(df)):
-                row = df.iloc[i]
-                # Stop at SOMME row
-                if pd.notna(row[1]) and str(row[1]).upper() == 'SOMME':
-                    break
-                    
-                # Skip if no number in first column
-                if pd.isna(row[1]):
-                    continue
-                    
-                try:
-                    num = int(row[1])
-                    nom = str(row[2]) if pd.notna(row[2]) else ""
-                    prenom = str(row[3]) if pd.notna(row[3]) else ""
-                    rib = str(row[4]) if pd.notna(row[4]) else ""
-                    montant = float(row[6]) if pd.notna(row[6]) else 0.0
-                    
-                    # Clean RIB (remove single quotes)
-                    rib = rib.replace("'", "")
-                    
-                    data_rows.append({
-                        'num': num,
-                        'nom': nom,
-                        'prenom': prenom,
-                        'rib': rib,
-                        'montant': montant
-                    })
-                except (ValueError, TypeError):
-                    continue
-            
             if not data_rows:
-                QMessageBox.critical(self, "Error", "No valid data found in Excel file!")
+                QMessageBox.critical(self, "Error", "No valid data found in file!")
                 return
             
             # Generate UNL content
@@ -471,6 +438,61 @@ class ExcelToUNLConverter(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred during conversion:\n{str(e)}")
             self.statusBar().showMessage("Conversion failed!")
+    
+    def extract_from_excel(self):
+        """Extract data from Excel file"""
+        # Read Excel file
+        df = pd.read_excel(self.input_file, header=None)
+        
+        # Find the data section (starts after "NOM" header)
+        data_start_row = None
+        for i, row in df.iterrows():
+            if row[2] == 'NOM':
+                data_start_row = i + 1
+                break
+        
+        if data_start_row is None:
+            raise Exception("Could not find data header in Excel file!")
+        
+        # Extract data rows
+        data_rows = []
+        for i in range(data_start_row, len(df)):
+            row = df.iloc[i]
+            # Stop at SOMME row
+            if pd.notna(row[1]) and str(row[1]).upper() == 'SOMME':
+                break
+                
+            # Skip if no number in first column
+            if pd.isna(row[1]):
+                continue
+                
+            try:
+                num = int(row[1])
+                nom = str(row[2]) if pd.notna(row[2]) else ""
+                prenom = str(row[3]) if pd.notna(row[3]) else ""
+                rib = str(row[4]) if pd.notna(row[4]) else ""
+                montant = float(row[6]) if pd.notna(row[6]) else 0.0
+                
+                # Clean RIB (remove single quotes)
+                rib = rib.replace("'", "")
+                
+                data_rows.append({
+                    'num': num,
+                    'nom': nom,
+                    'prenom': prenom,
+                    'rib': rib,
+                    'montant': montant
+                })
+            except (ValueError, TypeError):
+                continue
+        
+        return data_rows
+    
+    def extract_from_word(self):
+        """Extract data from Word file"""
+        # TODO: Implement Word extraction logic once user provides real Word format
+        # For now, return empty list as placeholder
+        raise Exception("Word file support is not yet implemented. Please provide the Word file format.")
             
     def generate_unl_content(self, data_rows):
         """Generate UNL file content"""
