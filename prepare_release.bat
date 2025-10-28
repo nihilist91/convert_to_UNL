@@ -16,8 +16,7 @@ echo.
 
 REM Build the EXE
 echo [1/4] Building EXE with PyInstaller...
-call .venv\Scripts\activate.bat
-pyinstaller Excel_to_UNL_Converter.spec --noconfirm
+.venv\Scripts\python.exe -m PyInstaller Excel_to_UNL_Converter.spec --noconfirm
 
 if errorlevel 1 (
     echo ERROR: Build failed!

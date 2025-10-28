@@ -1,0 +1,40 @@
+name: Build and release Windows EXE
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Upgrade pip and install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build EXE with PyInstaller
+        run: |
+          pyinstaller Excel_to_UNL_Converter.spec --noconfirm
+
+      - name: List dist folder
+        run: dir dist
+
+      - name: Create GitHub Release and upload EXE
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: |
+            dist\Excel_to_UNL_Converter.exe
