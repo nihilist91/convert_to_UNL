@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build-windows-exe:
     runs-on: windows-latest
@@ -36,5 +39,4 @@ jobs:
         with:
           tag: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
-          files: |
-            dist\Excel_to_UNL_Converter.exe
+          artifacts: "dist\\Excel_to_UNL_Converter.exe"
