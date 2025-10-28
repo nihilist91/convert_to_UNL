@@ -1,0 +1,5 @@
+/.venv
+/build
+/Excel_to_UNL_Converter.spec
+/run_converter.bat
+/test_conversion.py

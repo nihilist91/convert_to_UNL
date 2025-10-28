@@ -1,0 +1,591 @@
+"""
+Excel to UNL Converter - Desktop Application
+Converts Excel virement files to UNL format
+"""
+import sys
+import os
+from datetime import datetime
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+                             QHBoxLayout, QLabel, QLineEdit, QPushButton, 
+                             QFileDialog, QTextEdit, QGroupBox, QGridLayout,
+                             QMessageBox, QFrame, QDateEdit)
+from PyQt6.QtCore import Qt, QDate
+from PyQt6.QtGui import QFont, QIcon
+import pandas as pd
+
+
+class ExcelToUNLConverter(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.excel_file = None
+        self.output_data = []
+        self.init_ui()
+        
+    def init_ui(self):
+        """Initialize the user interface"""
+        self.setWindowTitle("Excel to UNL Converter")
+        self.setGeometry(100, 100, 900, 700)
+        
+        # Create central widget and main layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Title
+        title_label = QLabel("📄 Excel to UNL File Converter")
+        title_font = QFont()
+        title_font.setPointSize(16)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(title_label)
+        
+        # File selection section
+        file_group = self.create_file_selection_group()
+        main_layout.addWidget(file_group)
+        
+        # Header information section
+        header_group = self.create_header_input_group()
+        main_layout.addWidget(header_group)
+        
+        # Action buttons
+        button_layout = self.create_action_buttons()
+        main_layout.addLayout(button_layout)
+        
+        # Preview section
+        preview_group = self.create_preview_group()
+        main_layout.addWidget(preview_group)
+        
+        # Developer credit footer
+        footer_label = QLabel("Developed by: CHAARAOUI MOHAMMED | 0659226281")
+        footer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        footer_font = QFont()
+        footer_font.setPointSize(9)
+        footer_font.setItalic(True)
+        footer_label.setFont(footer_font)
+        footer_label.setStyleSheet("color: #666666; padding: 5px;")
+        main_layout.addWidget(footer_label)
+        
+        # Status bar
+        self.statusBar().showMessage("Ready")
+        
+        # Apply stylesheet
+        self.apply_stylesheet()
+        
+    def create_file_selection_group(self):
+        """Create file selection group"""
+        group = QGroupBox("📁 File Selection")
+        layout = QHBoxLayout()
+        
+        self.file_label = QLabel("No file selected")
+        self.file_label.setStyleSheet("padding: 5px; background-color: #f0f0f0; border-radius: 3px;")
+        
+        self.browse_btn = QPushButton("Browse Excel File")
+        self.browse_btn.clicked.connect(self.browse_file)
+        self.browse_btn.setMinimumHeight(35)
+        
+        layout.addWidget(self.file_label, 3)
+        layout.addWidget(self.browse_btn, 1)
+        
+        group.setLayout(layout)
+        return group
+        
+    def create_header_input_group(self):
+        """Create header information input group"""
+        group = QGroupBox("📝 Header Information")
+        layout = QGridLayout()
+        layout.setSpacing(10)
+        
+        # Input fields with labels
+        fields = [
+            ("File Name:", "nom_fic", "text"),
+            ("Description:", "des_fic", "text"),
+            ("Generation Date (DD/MM/YYYY):", "dat_gen", "date"),
+            ("Sender Code:", "cod_emet", "text"),
+            ("Destination Code:", "cod_dest", "text"),
+            ("Remittance Number:", "n_remise", "text"),
+            ("User Name:", "utilisateur", "text"),
+            ("Phone Number:", "telephone", "text")
+        ]
+        
+        self.inputs = {}
+        
+        for i, field_info in enumerate(fields):
+            label_text = field_info[0]
+            field_name = field_info[1]
+            field_type = field_info[2]
+            
+            label = QLabel(label_text)
+            label.setMinimumWidth(200)
+            
+            # Create date picker for date field, regular input for others
+            if field_type == "date":
+                input_field = QDateEdit()
+                input_field.setCalendarPopup(True)  # Show calendar popup
+                input_field.setDisplayFormat("dd/MM/yyyy")  # Display format
+                input_field.setDate(QDate.currentDate())  # Set to today
+                input_field.setMinimumHeight(30)
+                # Connect date change to update description
+                input_field.dateChanged.connect(self.update_description_from_date)
+                # Connect date change to update filename
+                input_field.dateChanged.connect(self.update_filename)
+            else:
+                input_field = QLineEdit()
+                input_field.setMinimumHeight(30)
+                
+                # Set default values for text fields
+                if field_name == "cod_emet":
+                    input_field.setText("10")
+                    # Connect sender code change to update filename
+                    input_field.textChanged.connect(self.update_filename)
+                elif field_name == "cod_dest":
+                    input_field.setText("1050")
+                    # Connect destination code change to update filename
+                    input_field.textChanged.connect(self.update_filename)
+                elif field_name == "n_remise":
+                    input_field.setText("0001")
+                    # Connect remittance number change to update filename
+                    input_field.textChanged.connect(self.update_filename)
+                elif field_name == "des_fic":
+                    # Set initial description based on current date
+                    input_field.setText(f"ov {QDate.currentDate().toString('dd/MM/yyyy')}")
+                
+            self.inputs[field_name] = input_field
+            
+            layout.addWidget(label, i, 0)
+            layout.addWidget(input_field, i, 1)
+        
+        # Initialize filename after all fields are created
+        self.update_filename()
+        
+        group.setLayout(layout)
+        return group
+        
+    def create_action_buttons(self):
+        """Create action buttons"""
+        layout = QHBoxLayout()
+        layout.setSpacing(10)
+        
+        self.convert_btn = QPushButton("🔄 Convert to UNL")
+        self.convert_btn.clicked.connect(self.convert_to_unl)
+        self.convert_btn.setMinimumHeight(40)
+        self.convert_btn.setEnabled(False)
+        
+        self.save_btn = QPushButton("💾 Save UNL File")
+        self.save_btn.clicked.connect(self.save_unl)
+        self.save_btn.setMinimumHeight(40)
+        self.save_btn.setEnabled(False)
+        
+        self.clear_btn = QPushButton("🗑️ Clear")
+        self.clear_btn.clicked.connect(self.clear_all)
+        self.clear_btn.setMinimumHeight(40)
+        
+        layout.addWidget(self.convert_btn)
+        layout.addWidget(self.save_btn)
+        layout.addWidget(self.clear_btn)
+        
+        return layout
+        
+    def create_preview_group(self):
+        """Create preview group"""
+        group = QGroupBox("👁️ Preview")
+        layout = QVBoxLayout()
+        
+        self.preview_text = QTextEdit()
+        self.preview_text.setReadOnly(True)
+        self.preview_text.setMinimumHeight(200)
+        self.preview_text.setFont(QFont("Courier New", 9))
+        
+        layout.addWidget(self.preview_text)
+        group.setLayout(layout)
+        return group
+        
+    def apply_stylesheet(self):
+        """Apply modern stylesheet"""
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #f5f5f5;
+            }
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #cccccc;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                background-color: white;
+                color: #000000;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+                color: #000000;
+            }
+            QLabel {
+                color: #000000;
+                background-color: transparent;
+            }
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                padding: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #005a9e;
+            }
+            QPushButton:pressed {
+                background-color: #004578;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+            QLineEdit {
+                border: 1px solid #cccccc;
+                border-radius: 3px;
+                padding: 5px;
+                background-color: white;
+                color: #000000;
+            }
+            QLineEdit:focus {
+                border: 2px solid #0078d4;
+            }
+            QDateEdit {
+                border: 1px solid #cccccc;
+                border-radius: 3px;
+                padding: 5px;
+                background-color: white;
+                color: #000000;
+            }
+            QDateEdit:focus {
+                border: 2px solid #0078d4;
+            }
+            QDateEdit::drop-down {
+                border: none;
+                background-color: #0078d4;
+                width: 20px;
+                border-top-right-radius: 3px;
+                border-bottom-right-radius: 3px;
+            }
+            QDateEdit::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 6px solid white;
+                width: 0px;
+                height: 0px;
+            }
+            QCalendarWidget {
+                background-color: white;
+                color: #000000;
+            }
+            QCalendarWidget QToolButton {
+                color: #000000;
+                background-color: white;
+                border: 1px solid #cccccc;
+                border-radius: 3px;
+                padding: 5px;
+            }
+            QCalendarWidget QToolButton:hover {
+                background-color: #0078d4;
+                color: white;
+            }
+            QCalendarWidget QMenu {
+                background-color: white;
+                color: #000000;
+            }
+            QCalendarWidget QSpinBox {
+                background-color: white;
+                color: #000000;
+                border: 1px solid #cccccc;
+            }
+            QCalendarWidget QWidget#qt_calendar_navigationbar {
+                background-color: #0078d4;
+            }
+            QCalendarWidget QAbstractItemView {
+                selection-background-color: #0078d4;
+                selection-color: white;
+                color: #000000;
+                background-color: white;
+            }
+            QTextEdit {
+                border: 1px solid #cccccc;
+                border-radius: 3px;
+                background-color: #fafafa;
+                color: #000000;
+            }
+            QStatusBar {
+                color: #000000;
+            }
+            QMessageBox {
+                background-color: white;
+                color: #000000;
+            }
+            QMessageBox QLabel {
+                color: #000000;
+                background-color: white;
+            }
+            QMessageBox QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                padding: 6px 20px;
+                min-width: 60px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #005a9e;
+            }
+        """)
+    
+    def update_description_from_date(self, date):
+        """Update description field when date changes"""
+        date_str = date.toString("dd/MM/yyyy")
+        self.inputs['des_fic'].setText(f"ov {date_str}")
+    
+    def update_filename(self):
+        """Update filename based on date and remittance number"""
+        # Get date from date picker
+        date_obj = self.inputs['dat_gen'].date()
+        # Format: DDMMYY (reverse of the actual date format)
+        day = date_obj.toString("dd")
+        month = date_obj.toString("MM")
+        year = date_obj.toString("yy")
+        date_part = f"{day}{month}{year}"  # e.g., "161025" for 16/10/2025
+        
+        # Get remittance number (should be 4 digits, use 0000 if empty)
+        remise = self.inputs['n_remise'].text().strip()
+        if not remise:
+            remise = "0000"
+        else:
+            remise = remise.zfill(4)  # Pad with zeros to 4 digits
+        
+        # Get sender and destination codes (use empty if not set)
+        cod_emet = self.inputs['cod_emet'].text().strip()
+        cod_dest = self.inputs['cod_dest'].text().strip()
+        
+        # Format: bvov + cod_emet + cod_dest + 00000 + date (DDMMYY) + remise
+        # Example: bvov10105000002510160001
+        # If fields are empty: bvov000000000000000000000
+        filename = f"bvov{cod_emet}{cod_dest}0000{date_part}{remise}.unl"
+        
+        self.inputs['nom_fic'].setText(filename)
+        
+    def browse_file(self):
+        """Browse for Excel file"""
+        file_name, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Excel File",
+            "",
+            "Excel Files (*.xlsx *.xls);;All Files (*)"
+        )
+        
+        if file_name:
+            self.excel_file = file_name
+            self.file_label.setText(os.path.basename(file_name))
+            self.convert_btn.setEnabled(True)
+            self.statusBar().showMessage(f"File loaded: {os.path.basename(file_name)}")
+                
+    def convert_to_unl(self):
+        """Convert Excel to UNL format"""
+        if not self.excel_file:
+            QMessageBox.warning(self, "Warning", "Please select an Excel file first!")
+            return
+            
+        # Validate inputs
+        required_fields = ['nom_fic', 'des_fic', 'dat_gen', 'cod_emet', 
+                          'cod_dest', 'n_remise', 'utilisateur', 'telephone']
+        
+        for field in required_fields:
+            if field == 'dat_gen':
+                # Date field is always valid (QDateEdit always has a date)
+                continue
+            if not self.inputs[field].text().strip():
+                QMessageBox.warning(self, "Warning", f"Please fill in all required fields!")
+                return
+        
+        try:
+            # Read Excel file
+            df = pd.read_excel(self.excel_file, header=None)
+            
+            # Find the data section (starts after "NOM" header)
+            data_start_row = None
+            for i, row in df.iterrows():
+                if row[2] == 'NOM':
+                    data_start_row = i + 1
+                    break
+            
+            if data_start_row is None:
+                QMessageBox.critical(self, "Error", "Could not find data header in Excel file!")
+                return
+            
+            # Extract data rows
+            data_rows = []
+            for i in range(data_start_row, len(df)):
+                row = df.iloc[i]
+                # Stop at SOMME row
+                if pd.notna(row[1]) and str(row[1]).upper() == 'SOMME':
+                    break
+                    
+                # Skip if no number in first column
+                if pd.isna(row[1]):
+                    continue
+                    
+                try:
+                    num = int(row[1])
+                    nom = str(row[2]) if pd.notna(row[2]) else ""
+                    prenom = str(row[3]) if pd.notna(row[3]) else ""
+                    rib = str(row[4]) if pd.notna(row[4]) else ""
+                    montant = float(row[6]) if pd.notna(row[6]) else 0.0
+                    
+                    # Clean RIB (remove single quotes)
+                    rib = rib.replace("'", "")
+                    
+                    data_rows.append({
+                        'num': num,
+                        'nom': nom,
+                        'prenom': prenom,
+                        'rib': rib,
+                        'montant': montant
+                    })
+                except (ValueError, TypeError):
+                    continue
+            
+            if not data_rows:
+                QMessageBox.critical(self, "Error", "No valid data found in Excel file!")
+                return
+            
+            # Generate UNL content
+            self.generate_unl_content(data_rows)
+            
+            self.save_btn.setEnabled(True)
+            self.statusBar().showMessage(f"Conversion successful! {len(data_rows)} records processed.")
+            QMessageBox.information(self, "Success", 
+                                  f"Conversion completed successfully!\n{len(data_rows)} records processed.")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred during conversion:\n{str(e)}")
+            self.statusBar().showMessage("Conversion failed!")
+            
+    def generate_unl_content(self, data_rows):
+        """Generate UNL file content"""
+        unl_lines = []
+        
+        # Header section
+        unl_lines.append(f"@nom_fic  :{self.inputs['nom_fic'].text()}")
+        unl_lines.append(f"@des_fic  :{self.inputs['des_fic'].text()}")
+        
+        # Get date from QDateEdit widget
+        date_obj = self.inputs['dat_gen'].date()
+        date_str = date_obj.toString("dd/MM/yyyy")
+        unl_lines.append(f"@dat_gen  :{date_str}")
+        
+        unl_lines.append(f"@cod_emet :{self.inputs['cod_emet'].text()}")
+        unl_lines.append(f"@cod_dest :{self.inputs['cod_dest'].text()}")
+        unl_lines.append(f"@n_remise :{self.inputs['n_remise'].text()}")
+        unl_lines.append(f"@nbr_enr  : {len(data_rows)}")
+        unl_lines.append(f"@taille   :")
+        unl_lines.append(f"@ utilisateur: {self.inputs['utilisateur'].text()}")
+        unl_lines.append(f"@ {self.inputs['telephone'].text()}")
+        
+        # Parse date for data rows
+        day = date_obj.toString("dd")
+        month = date_obj.toString("MM")
+        year = date_obj.toString("yyyy")
+        
+        cod_emet = self.inputs['cod_emet'].text()
+        
+        # Data rows
+        for row in data_rows:
+            num_str = f"{row['num']:02d}"
+            # Combine name and remove extra spaces
+            name = f"{row['nom']} {row['prenom']}"
+            name = ' '.join(name.split())  # Remove extra spaces
+            
+            # Format RIB - remove single quote if present
+            rib = row['rib'].replace("'", "")
+            
+            montant = f"{row['montant']:.2f}"
+            
+            line = f"{cod_emet}|{year}|{month}|{day}|{num_str}|{name}|{rib}|{montant}|"
+            unl_lines.append(line)
+        
+        # Store output
+        self.output_data = unl_lines
+        
+        # Display preview (first 20 lines)
+        preview_lines = unl_lines[:20]
+        if len(unl_lines) > 20:
+            preview_lines.append(f"\n... and {len(unl_lines) - 20} more lines")
+        
+        self.preview_text.setPlainText('\n'.join(preview_lines))
+        
+    def save_unl(self):
+        """Save UNL file"""
+        if not self.output_data:
+            QMessageBox.warning(self, "Warning", "Please convert a file first!")
+            return
+            
+        default_name = self.inputs['nom_fic'].text()
+        file_name, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save UNL File",
+            default_name,
+            "UNL Files (*.unl);;All Files (*)"
+        )
+        
+        if file_name:
+            try:
+                with open(file_name, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(self.output_data))
+                    f.write('\n')
+                
+                QMessageBox.information(self, "Success", f"File saved successfully!\n{file_name}")
+                self.statusBar().showMessage(f"File saved: {os.path.basename(file_name)}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to save file:\n{str(e)}")
+                
+    def clear_all(self):
+        """Clear all fields and reset"""
+        self.excel_file = None
+        self.output_data = []
+        self.file_label.setText("No file selected")
+        self.preview_text.clear()
+        
+        # Reset input fields to defaults
+        for field_name, input_field in self.inputs.items():
+            if field_name == "dat_gen":
+                # Reset date picker to today
+                input_field.setDate(QDate.currentDate())
+            elif field_name == "des_fic":
+                # Keep description, don't clear it
+                continue
+            else:
+                # Clear all other fields including codes and remittance
+                input_field.clear()
+        
+        self.convert_btn.setEnabled(False)
+        self.save_btn.setEnabled(False)
+        self.statusBar().showMessage("Cleared")
+
+
+def main():
+    app = QApplication(sys.argv)
+    
+    # Set application style
+    app.setStyle('Fusion')
+    
+    window = ExcelToUNLConverter()
+    window.show()
+    
+    sys.exit(app.exec())
+
+
+if __name__ == '__main__':
+    main()
