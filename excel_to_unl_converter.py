@@ -471,11 +471,11 @@ class ExcelToUNLConverter(QMainWindow):
         
         # Search for BOUDOUR format markers
         # Common BOUDOUR headers might be in different columns or have different patterns
-        # Check for patterns like: numero, designation, rib, montant, etc.
+        # Check for patterns like: numero, designation, rib, compte, montant, etc.
         for i, row in df.iterrows():
             row_str = ' '.join([str(cell).upper() for cell in row if pd.notna(cell)])
-            # Look for common BOUDOUR patterns
-            if any(keyword in row_str for keyword in ['DESIGNATION', 'BÉNÉFICIAIRE', 'BENEFICIAIRE', 'RIB', 'MONTANT']):
+            # Look for common BOUDOUR patterns (added COMPTE, PRÉNOM, DHS)
+            if any(keyword in row_str for keyword in ['DESIGNATION', 'BÉNÉFICIAIRE', 'BENEFICIAIRE', 'RIB', 'MONTANT', 'COMPTE', 'PRÉNOM', 'PRENOM', 'DHS']):
                 return 'BOUDOUR'
         
         # If no specific format detected, return None
@@ -539,19 +539,30 @@ class ExcelToUNLConverter(QMainWindow):
         for i, row in df.iterrows():
             row_values = [str(cell).upper().strip() if pd.notna(cell) else "" for cell in row]
             
-            # Check if this row contains header-like values
-            if any(keyword in ' '.join(row_values) for keyword in ['RIB', 'MONTANT', 'DESIGNATION', 'BÉNÉFICIAIRE', 'BENEFICIAIRE']):
+            # Check if this row has headers across MULTIPLE columns (not just one long text)
+            # Count non-empty columns
+            non_empty_cols = sum(1 for val in row_values if val)
+            
+            # Count how many columns contain header keywords
+            header_cols = sum(1 for val in row_values if any(keyword in val for keyword in [
+                'RIB', 'COMPTE', 'MONTANT', 'DHS', 'BÉNÉFICIAIRE', 'BENEFICIAIRE', 'PRÉNOM', 'PRENOM', 'NOM', 'AGENCE'
+            ]))
+            
+            # Consider it a header row if it has:
+            # - At least 3 non-empty columns
+            # - At least 2 columns with header keywords
+            if non_empty_cols >= 3 and header_cols >= 2:
                 header_row = i
                 
                 # Map column positions
                 for col_idx, cell_value in enumerate(row_values):
-                    if 'RIB' in cell_value:
+                    if any(rib_key in cell_value for rib_key in ['NUMÉRO DU COMPTE', 'NUMERO DU COMPTE', 'RIB']) and 'NOM' not in cell_value:
                         col_mapping['rib'] = col_idx
-                    elif 'MONTANT' in cell_value:
+                    elif 'MONTANT' in cell_value or ('DHS' in cell_value and 'MONTANT' not in row_values[col_idx-1] if col_idx > 0 else True):
                         col_mapping['montant'] = col_idx
-                    elif any(name_key in cell_value for name_key in ['DESIGNATION', 'BÉNÉFICIAIRE', 'BENEFICIAIRE', 'NOM']):
+                    elif any(name_key in cell_value for name_key in ['NOM ET PRÉNOM', 'NOM ET PRENOM', 'PRÉNOM', 'PRENOM']) and 'TITULAIRE' not in cell_value and 'COMPTE' not in cell_value:
                         col_mapping['nom'] = col_idx
-                    elif any(num_key in cell_value for num_key in ['N°', 'NO', 'NUM', 'NUMERO']):
+                    elif any(num_key in cell_value for num_key in ['N°', 'NO']) and 'COMPTE' not in cell_value and 'NUMÉRO' not in cell_value:
                         col_mapping['num'] = col_idx
                 
                 break
