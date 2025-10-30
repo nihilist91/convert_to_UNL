@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **CRITICAL**: Fixed "Could not find data header in Excel file" error for BOUDOUR format files
+- **CRITICAL**: Fixed RIB numbers with spaces not being processed (e.g., "007 323 0009123000301876 32")
+- All RIB cleaning now removes both single quotes and spaces consistently across all format handlers
 - Application now works with different Excel layouts and column arrangements
 
 ### Technical Details
@@ -28,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `extract_cntr_format()` method for traditional CNTR files
 - Added `extract_boudour_format()` method with header keyword detection
 - Added `extract_boudour_auto_detect()` method for intelligent pattern-based extraction
+- Enhanced RIB cleaning in CNTR format handler to remove spaces (previously only removed quotes)
+- Enhanced RIB cleaning in UNL generation to ensure consistency
 - RIB pattern detection (20-24 digit validation)
 - Flexible amount parsing with comma handling
 - Automatic row numbering when numbers not present in file

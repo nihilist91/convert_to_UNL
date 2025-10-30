@@ -512,8 +512,8 @@ class ExcelToUNLConverter(QMainWindow):
                 rib = str(row[4]) if pd.notna(row[4]) else ""
                 montant = float(row[6]) if pd.notna(row[6]) else 0.0
                 
-                # Clean RIB (remove single quotes)
-                rib = rib.replace("'", "")
+                # Clean RIB (remove single quotes and spaces)
+                rib = rib.replace("'", "").replace(" ", "").strip()
                 
                 data_rows.append({
                     'num': num,
@@ -722,8 +722,8 @@ class ExcelToUNLConverter(QMainWindow):
             name = f"{row['nom']} {row['prenom']}"
             name = ' '.join(name.split())  # Remove extra spaces
             
-            # Format RIB - remove single quote if present
-            rib = row['rib'].replace("'", "")
+            # Format RIB - ensure it's clean (remove quotes and spaces)
+            rib = row['rib'].replace("'", "").replace(" ", "").strip()
             
             montant = f"{row['montant']:.2f}"
             
