@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -16,14 +16,36 @@
 
 ## ✨ Features
 
-- ✅ **Excel to UNL Conversion** - Convert Excel virement files to UNL format
+- ✅ **Multi-Format Excel Support** - Automatically detects CNTR and BOUDOUR formats
+- ✅ **Intelligent Format Detection** - No need to specify file format
 - ✅ **Modern Interface** - Clean PyQt6 GUI with intuitive controls
 - ✅ **Auto-Filename Generation** - Automatically generates 24-character filenames
 - ✅ **Auto-Description** - Updates description based on selected date
 - ✅ **Date Picker** - Calendar widget for easy date selection
 - ✅ **Real-time Preview** - See UNL output before saving
 - ✅ **Data Validation** - Ensures all required fields are filled
-- ⏳ **Word Support** - Coming in v1.1.0!
+- ⏳ **Word Support** - Coming soon!
+
+---
+
+## 🎯 What's New in v1.1.0
+
+### Multi-Format Support
+The application now **automatically detects** whether your Excel file is in CNTR or BOUDOUR format:
+
+- **CNTR Format**: Traditional format with "NOM" header in column C
+- **BOUDOUR Format**: Flexible format with automatic column detection
+- **Auto-Detection**: Intelligent pattern recognition for files without clear headers
+
+**No more "Could not find data header" errors!** 🎉
+
+Simply load your file and the application will:
+1. Detect the format automatically
+2. Map columns intelligently
+3. Extract data correctly
+4. Show you which format was detected
+
+See [CHANGELOG.md](CHANGELOG.md) for full release notes.
 
 ---
 

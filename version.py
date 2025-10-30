@@ -2,10 +2,10 @@
 Version information for Excel/Word to UNL Converter
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "CHAARAOUI MOHAMMED"
 __app_name__ = "Excel/Word to UNL Converter"
-__release_date__ = "2025-10-28"
+__release_date__ = "2025-10-30"
 
 # Version history
 VERSION_HISTORY = {

@@ -34,18 +34,47 @@ python excel_to_unl_converter.py
 5. Click **"💾 Save UNL File"**
 6. Done! ✅
 
-## 📊 Excel Format Required
+## 📊 Supported Excel Formats
 
-Your Excel file must have:
-- **Row 13**: Headers (N°, NOM, PRENOM, RIB, AGENCE, MONTANT)
-- **Row 14+**: Data rows
+The application **automatically detects** the Excel file format and processes it accordingly. It supports:
+
+### 1. CNTR Format
+Traditional format with specific column layout:
+- **Row with "NOM" header**: The application looks for "NOM" in column C
+- **Data starts**: Next row after "NOM" header
+- **Column Layout**:
   - Column B: Number (1, 2, 3...)
-  - Column C: Last name
-  - Column D: First name
+  - Column C: Last name (NOM)
+  - Column D: First name (PRENOM)
   - Column E: RIB (24 digits)
-  - Column G: Amount
+  - Column G: Amount (MONTANT)
+- **Ends at**: Row containing "SOMME"
 
 **Example:** See `samples/CNTR_PRIMAIR.xlsx`
+
+### 2. BOUDOUR Format
+Flexible format with automatic column detection:
+- **Header Detection**: Looks for keywords like "RIB", "MONTANT", "DESIGNATION", "BÉNÉFICIAIRE"
+- **Automatic Column Mapping**: The application automatically identifies which columns contain:
+  - Names/Beneficiaries
+  - RIB numbers
+  - Amounts
+  - Row numbers (if present)
+- **Flexible Layout**: Works with different column arrangements
+- **Ends at**: Row containing "TOTAL" or "SOMME"
+
+### Auto-Detection
+If no clear headers are found, the application uses intelligent pattern recognition:
+- **RIB Detection**: Looks for 20-24 digit numbers
+- **Amount Detection**: Identifies decimal numbers
+- **Name Detection**: Recognizes text fields
+- Assigns sequential numbers automatically
+
+### Format Detection Messages
+When you convert a file, you'll see which format was detected:
+- "Detected format: CNTR. Processing..."
+- "Detected format: BOUDOUR. Processing..."
+- Success message shows: "X records processed (Format: CNTR/BOUDOUR)"
 
 ## 📁 Folder Structure
 

@@ -416,6 +416,13 @@ class ExcelToUNLConverter(QMainWindow):
             file_ext = os.path.splitext(self.input_file)[1].lower()
             
             if file_ext in ['.xlsx', '.xls']:
+                # First detect format
+                df = pd.read_excel(self.input_file, header=None)
+                detected_format = self.detect_excel_format(df)
+                
+                if detected_format:
+                    self.statusBar().showMessage(f"Detected format: {detected_format}. Processing...")
+                
                 data_rows = self.extract_from_excel()
             elif file_ext in ['.docx', '.doc']:
                 data_rows = self.extract_from_word()
@@ -431,28 +438,60 @@ class ExcelToUNLConverter(QMainWindow):
             self.generate_unl_content(data_rows)
             
             self.save_btn.setEnabled(True)
-            self.statusBar().showMessage(f"Conversion successful! {len(data_rows)} records processed.")
+            format_info = f" (Format: {detected_format})" if file_ext in ['.xlsx', '.xls'] and detected_format else ""
+            self.statusBar().showMessage(f"Conversion successful! {len(data_rows)} records processed{format_info}")
             QMessageBox.information(self, "Success", 
-                                  f"Conversion completed successfully!\n{len(data_rows)} records processed.")
+                                  f"Conversion completed successfully!\n{len(data_rows)} records processed{format_info}")
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred during conversion:\n{str(e)}")
             self.statusBar().showMessage("Conversion failed!")
     
     def extract_from_excel(self):
-        """Extract data from Excel file"""
+        """Extract data from Excel file - supports multiple formats"""
         # Read Excel file
         df = pd.read_excel(self.input_file, header=None)
         
+        # Detect file format by searching for known headers
+        file_format = self.detect_excel_format(df)
+        
+        if file_format == 'CNTR':
+            return self.extract_cntr_format(df)
+        elif file_format == 'BOUDOUR':
+            return self.extract_boudour_format(df)
+        else:
+            raise Exception("Could not detect file format. Supported formats: CNTR (with 'NOM' header) or BOUDOUR format.")
+    
+    def detect_excel_format(self, df):
+        """Detect the format of the Excel file"""
+        # Search for CNTR format markers (NOM in column 2)
+        for i, row in df.iterrows():
+            if pd.notna(row[2]) and str(row[2]).strip().upper() == 'NOM':
+                return 'CNTR'
+        
+        # Search for BOUDOUR format markers
+        # Common BOUDOUR headers might be in different columns or have different patterns
+        # Check for patterns like: numero, designation, rib, montant, etc.
+        for i, row in df.iterrows():
+            row_str = ' '.join([str(cell).upper() for cell in row if pd.notna(cell)])
+            # Look for common BOUDOUR patterns
+            if any(keyword in row_str for keyword in ['DESIGNATION', 'BÉNÉFICIAIRE', 'BENEFICIAIRE', 'RIB', 'MONTANT']):
+                return 'BOUDOUR'
+        
+        # If no specific format detected, return None
+        return None
+    
+    def extract_cntr_format(self, df):
+        """Extract data from CNTR format Excel file"""
         # Find the data section (starts after "NOM" header)
         data_start_row = None
         for i, row in df.iterrows():
-            if row[2] == 'NOM':
+            if pd.notna(row[2]) and str(row[2]).strip().upper() == 'NOM':
                 data_start_row = i + 1
                 break
         
         if data_start_row is None:
-            raise Exception("Could not find data header in Excel file!")
+            raise Exception("Could not find 'NOM' header in CNTR format file!")
         
         # Extract data rows
         data_rows = []
@@ -462,7 +501,7 @@ class ExcelToUNLConverter(QMainWindow):
             if pd.notna(row[1]) and str(row[1]).upper() == 'SOMME':
                 break
                 
-            # Skip if no number in first column
+            # Skip if no number in column 1
             if pd.isna(row[1]):
                 continue
                 
@@ -484,6 +523,160 @@ class ExcelToUNLConverter(QMainWindow):
                     'montant': montant
                 })
             except (ValueError, TypeError):
+                continue
+        
+        return data_rows
+    
+    def extract_boudour_format(self, df):
+        """Extract data from BOUDOUR format Excel file"""
+        # BOUDOUR format typically has headers in the first few rows
+        # We need to find the header row and then extract data
+        
+        header_row = None
+        col_mapping = {}
+        
+        # Search for the header row (contains RIB, MONTANT, etc.)
+        for i, row in df.iterrows():
+            row_values = [str(cell).upper().strip() if pd.notna(cell) else "" for cell in row]
+            
+            # Check if this row contains header-like values
+            if any(keyword in ' '.join(row_values) for keyword in ['RIB', 'MONTANT', 'DESIGNATION', 'BÉNÉFICIAIRE', 'BENEFICIAIRE']):
+                header_row = i
+                
+                # Map column positions
+                for col_idx, cell_value in enumerate(row_values):
+                    if 'RIB' in cell_value:
+                        col_mapping['rib'] = col_idx
+                    elif 'MONTANT' in cell_value:
+                        col_mapping['montant'] = col_idx
+                    elif any(name_key in cell_value for name_key in ['DESIGNATION', 'BÉNÉFICIAIRE', 'BENEFICIAIRE', 'NOM']):
+                        col_mapping['nom'] = col_idx
+                    elif any(num_key in cell_value for num_key in ['N°', 'NO', 'NUM', 'NUMERO']):
+                        col_mapping['num'] = col_idx
+                
+                break
+        
+        if header_row is None:
+            # If no header found, try to auto-detect based on data patterns
+            # Assume: first numeric column = num, first long text = name, RIB pattern, last numeric = montant
+            return self.extract_boudour_auto_detect(df)
+        
+        # Extract data starting from next row after header
+        data_rows = []
+        num_counter = 1  # Counter for rows without explicit number
+        
+        for i in range(header_row + 1, len(df)):
+            row = df.iloc[i]
+            
+            # Skip empty rows
+            if row.isna().all():
+                continue
+            
+            # Check for TOTAL/SOMME row
+            row_str = ' '.join([str(cell).upper() for cell in row if pd.notna(cell)])
+            if any(keyword in row_str for keyword in ['TOTAL', 'SOMME', 'MONTANT TOTAL']):
+                break
+            
+            try:
+                # Extract number (use counter if not in file)
+                if 'num' in col_mapping and pd.notna(row[col_mapping['num']]):
+                    num = int(row[col_mapping['num']])
+                else:
+                    num = num_counter
+                
+                # Extract name
+                nom = ""
+                prenom = ""
+                if 'nom' in col_mapping and pd.notna(row[col_mapping['nom']]):
+                    full_name = str(row[col_mapping['nom']]).strip()
+                    # Try to split name into nom and prenom
+                    name_parts = full_name.split(maxsplit=1)
+                    nom = name_parts[0] if len(name_parts) > 0 else ""
+                    prenom = name_parts[1] if len(name_parts) > 1 else ""
+                
+                # Extract RIB
+                rib = ""
+                if 'rib' in col_mapping and pd.notna(row[col_mapping['rib']]):
+                    rib = str(row[col_mapping['rib']]).replace("'", "").replace(" ", "").strip()
+                
+                # Extract montant
+                montant = 0.0
+                if 'montant' in col_mapping and pd.notna(row[col_mapping['montant']]):
+                    montant_str = str(row[col_mapping['montant']]).replace(",", "").replace(" ", "")
+                    montant = float(montant_str)
+                
+                # Only add row if it has at least a name or RIB
+                if nom or rib:
+                    data_rows.append({
+                        'num': num,
+                        'nom': nom,
+                        'prenom': prenom,
+                        'rib': rib,
+                        'montant': montant
+                    })
+                    num_counter += 1
+                    
+            except (ValueError, TypeError) as e:
+                # Skip rows that can't be parsed
+                continue
+        
+        return data_rows
+    
+    def extract_boudour_auto_detect(self, df):
+        """Auto-detect BOUDOUR format when no clear headers are found"""
+        data_rows = []
+        num_counter = 1
+        
+        # Start from first row and try to extract data
+        for i, row in df.iterrows():
+            # Skip empty rows
+            if row.isna().all():
+                continue
+            
+            # Check for TOTAL/SOMME row
+            row_str = ' '.join([str(cell).upper() for cell in row if pd.notna(cell)])
+            if any(keyword in row_str for keyword in ['TOTAL', 'SOMME', 'MONTANT TOTAL']):
+                break
+            
+            try:
+                # Try to find RIB pattern (usually 24 digits)
+                rib = ""
+                montant = 0.0
+                nom = ""
+                
+                for col_idx, cell_value in enumerate(row):
+                    if pd.isna(cell_value):
+                        continue
+                    
+                    cell_str = str(cell_value).replace("'", "").replace(" ", "").strip()
+                    
+                    # Check if it's a RIB (numeric, 20-24 digits)
+                    if cell_str.isdigit() and 20 <= len(cell_str) <= 24:
+                        rib = cell_str
+                    # Check if it's a montant (numeric with decimals)
+                    elif cell_str.replace(".", "", 1).replace(",", "", 1).isdigit():
+                        try:
+                            montant = float(cell_str.replace(",", ""))
+                        except:
+                            pass
+                    # Otherwise might be a name
+                    elif len(cell_str) > 3 and not cell_str.replace(".", "").isdigit():
+                        if not nom:  # Take first text field as name
+                            nom = cell_str
+                
+                # Only add if we have meaningful data
+                if rib or nom:
+                    name_parts = nom.split(maxsplit=1)
+                    data_rows.append({
+                        'num': num_counter,
+                        'nom': name_parts[0] if len(name_parts) > 0 else nom,
+                        'prenom': name_parts[1] if len(name_parts) > 1 else "",
+                        'rib': rib,
+                        'montant': montant
+                    })
+                    num_counter += 1
+                    
+            except Exception as e:
                 continue
         
         return data_rows

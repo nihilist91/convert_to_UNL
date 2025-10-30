@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-10-30
+
+### Added
+- **Multi-format Excel support**: Application now automatically detects and processes both CNTR and BOUDOUR format Excel files
+- Automatic format detection engine with intelligent column mapping
+- Support for BOUDOUR format with flexible header detection
+- Auto-detection fallback using pattern recognition for files without clear headers
+- Format detection feedback in status messages and success dialogs
+
+### Changed
+- `extract_from_excel()` method now includes format detection logic
+- Enhanced error messages to indicate supported formats
+- Updated USER_GUIDE.md with comprehensive format documentation
+
+### Fixed
+- **CRITICAL**: Fixed "Could not find data header in Excel file" error for BOUDOUR format files
+- Application now works with different Excel layouts and column arrangements
+
+### Technical Details
+- Added `detect_excel_format()` method to identify file format
+- Added `extract_cntr_format()` method for traditional CNTR files
+- Added `extract_boudour_format()` method with header keyword detection
+- Added `extract_boudour_auto_detect()` method for intelligent pattern-based extraction
+- RIB pattern detection (20-24 digit validation)
+- Flexible amount parsing with comma handling
+- Automatic row numbering when numbers not present in file
+
 ## [1.0.0] - 2025-10-28
 
 ### Added
